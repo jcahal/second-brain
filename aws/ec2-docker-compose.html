@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS EC2 + Docker Compose Walkthrough</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #5b6af0;
+    --accent2: #38bdf8;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --text: #e2e8f0;
+    --muted: #8892b0;
+    --code-bg: #141720;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  header {
+    border-left: 4px solid var(--accent);
+    padding: 1.2rem 1.5rem;
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 2.5rem;
+  }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
+  header p { color: var(--muted); margin-top: 0.3rem; font-size: 0.95rem; }
+
+  .prereqs {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--yellow);
+    border-radius: 8px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 2.5rem;
+    font-size: 0.9rem;
+  }
+  .prereqs h3 { color: var(--yellow); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.7rem; }
+  .prereqs ul { padding-left: 1.2rem; color: var(--muted); }
+  .prereqs li { margin-bottom: 0.3rem; }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .step-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.2rem;
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .step-num {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-title { font-size: 1.05rem; font-weight: 600; color: #fff; }
+  .step-sub { font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
+  .step-body { padding: 1.2rem 1.5rem; }
+  .step-body p { margin-bottom: 0.8rem; color: var(--muted); font-size: 0.93rem; }
+  .step-body p:last-child { margin-bottom: 0; }
+
+  .instruction { margin-bottom: 1rem; }
+  .instruction strong { color: var(--text); font-size: 0.93rem; display: block; margin-bottom: 0.3rem; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.83rem;
+    line-height: 1.6;
+    margin: 0.5rem 0 1rem;
+    position: relative;
+  }
+  .lang-tag {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.8rem;
+  }
+  code { color: var(--accent2); }
+  pre code { color: var(--text); }
+  .comment { color: #4a5568; }
+  .cmd { color: var(--green); }
+  .flag { color: var(--yellow); }
+  .str { color: #a78bfa; }
+
+  .callout {
+    border-radius: 7px;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.87rem;
+    margin: 0.8rem 0;
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+  }
+  .callout-icon { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+  .callout.warn { background: #2d2208; border: 1px solid #4a3310; color: #fde68a; }
+  .callout.info { background: #0c1f2d; border: 1px solid #1a3a50; color: #7dd3fc; }
+  .callout.success { background: #0a2018; border: 1px solid #1a4030; color: #6ee7b7; }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin: 0.6rem 0 1rem;
+  }
+  .field {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.83rem;
+  }
+  .field-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; }
+  .field-value { color: var(--accent2); font-family: monospace; }
+
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.35rem 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .check { color: var(--green); flex-shrink: 0; margin-top: 2px; }
+
+  .section-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 1.2rem 0 0.5rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0.6rem 0 1rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    background: var(--code-bg);
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-family: monospace;
+  }
+  td:first-child { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>🐳 EC2 + Docker Compose on AWS Free Tier</h1>
+  <p>Manual walkthrough — Ubuntu 22.04 · t2.micro · No Elastic Beanstalk</p>
+</header>
+
+<div class="prereqs">
+  <h3>Prerequisites</h3>
+  <ul>
+    <li>AWS account with free tier active</li>
+    <li>A working <code>docker-compose.yml</code> in your project</li>
+    <li>SSH client (built into macOS/Linux; use PuTTY or Windows Terminal on Windows)</li>
+    <li>Your project code in a Git repo (or ready to SCP up)</li>
+  </ul>
+</div>
+
+<!-- STEP 1 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">1</div>
+    <div>
+      <div class="step-title">Launch a t2.micro Instance</div>
+      <div class="step-sub">AWS Console → EC2 → Launch Instance</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <p>Go to <strong>EC2 → Instances → Launch Instance</strong>. Fill in the following:</p>
+
+    <div class="section-label">Instance Settings</div>
+    <div class="field-grid">
+      <div class="field"><div class="field-label">Name</div><div class="field-value">my-app (anything)</div></div>
+      <div class="field"><div class="field-label">AMI</div><div class="field-value">Ubuntu Server 22.04 LTS</div></div>
+      <div class="field"><div class="field-label">Instance Type</div><div class="field-value">t2.micro ✓ Free tier eligible</div></div>
+      <div class="field"><div class="field-label">Key Pair</div><div class="field-value">Create new → download .pem</div></div>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <span>Save the <code>.pem</code> file somewhere safe — you cannot re-download it. If you lose it, you're locked out of the instance.</span>
+    </div>
+
+    <div class="section-label">Network / Security Group — set these manually</div>
+    <table>
+      <tr><th>Type</th><th>Port</th><th>Source</th><th>Purpose</th></tr>
+      <tr><td>SSH</td><td>22</td><td>My IP</td><td>Terminal access</td></tr>
+      <tr><td>HTTP</td><td>80</td><td>Anywhere (0.0.0.0/0)</td><td>Public web traffic</td></tr>
+      <tr><td>Custom TCP</td><td>your app port</td><td>Anywhere</td><td>Direct access during dev</td></tr>
+    </table>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <span>Leave storage at the default 8 GB — you get up to 30 GB free. Only increase it if you know you need it.</span>
+    </div>
+
+    <p>Click <strong>Launch Instance</strong>. Wait ~60 seconds for the status to reach <em>2/2 checks passed</em>.</p>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">2</div>
+    <div>
+      <div class="step-title">SSH Into the Instance</div>
+      <div class="step-sub">From your local machine terminal</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <p>Get the <strong>Public IPv4 DNS</strong> from the EC2 instance detail panel, then:</p>
+
+    <div class="instruction">
+      <strong>Fix .pem permissions (macOS/Linux only — required)</strong>
+      <pre><span class="cmd">chmod</span> <span class="flag">400</span> ~/Downloads/my-key.pem</pre>
+    </div>
+
+    <div class="instruction">
+      <strong>Connect</strong>
+      <pre><span class="cmd">ssh</span> <span class="flag">-i</span> ~/Downloads/my-key.pem ubuntu@<span class="str">ec2-xx-xx-xx-xx.compute-1.amazonaws.com</span></pre>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <span>The default user is <code>ubuntu</code> for Ubuntu AMIs. Not <code>ec2-user</code>, not <code>root</code>.</span>
+    </div>
+
+    <p>If you see a shell prompt like <code>ubuntu@ip-172-xx-xx-xx:~$</code> — you're in.</p>
+
+    <div class="callout warn">
+      <span class="callout-icon">🔥</span>
+      <span>Most common failure here: SSH port 22 not open in your security group, or wrong source IP. Go back to EC2 → Security Groups and verify.</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">3</div>
+    <div>
+      <div class="step-title">Install Docker + Compose Plugin</div>
+      <div class="step-sub">Run these inside your SSH session</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <p>Use Docker's official install script — it handles Ubuntu correctly and installs the v2 Compose plugin:</p>
+
+<pre><span class="comment"># Update apt and install prerequisites</span>
+<span class="cmd">sudo apt-get update</span>
+<span class="cmd">sudo apt-get install</span> <span class="flag">-y</span> ca-certificates curl
+
+<span class="comment"># Add Docker's GPG key and repo</span>
+<span class="cmd">sudo install</span> <span class="flag">-m</span> 0755 <span class="flag">-d</span> /etc/apt/keyrings
+<span class="cmd">sudo curl</span> <span class="flag">-fsSL</span> https://download.docker.com/linux/ubuntu/gpg <span class="flag">-o</span> /etc/apt/keyrings/docker.asc
+<span class="cmd">echo</span> <span class="str">"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable"</span> | <span class="cmd">sudo tee</span> /etc/apt/sources.list.d/docker.list
+
+<span class="comment"># Install Docker Engine + Compose plugin</span>
+<span class="cmd">sudo apt-get update</span>
+<span class="cmd">sudo apt-get install</span> <span class="flag">-y</span> docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+<span class="comment"># Let ubuntu user run docker without sudo</span>
+<span class="cmd">sudo usermod</span> <span class="flag">-aG</span> docker ubuntu
+<span class="cmd">newgrp</span> docker</pre>
+
+    <div class="instruction">
+      <strong>Verify it worked</strong>
+      <pre><span class="cmd">docker</span> <span class="flag">--version</span>
+<span class="cmd">docker compose</span> <span class="flag">version</span>   <span class="comment"># note: no hyphen (v2 plugin)</span></pre>
+    </div>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <span><code>docker compose</code> (space, v2 plugin) vs <code>docker-compose</code> (hyphen, v1 standalone). The plugin is what you want — it's what gets installed above.</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 4 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">4</div>
+    <div>
+      <div class="step-title">Get Your Project onto the Instance</div>
+      <div class="step-sub">Two options — pick one</div>
+    </div>
+  </div>
+  <div class="step-body">
+
+    <div class="section-label">Option A — Clone from Git (recommended)</div>
+    <pre><span class="comment"># On the EC2 instance</span>
+<span class="cmd">git clone</span> https://github.com/yourname/your-repo.git
+<span class="cmd">cd</span> your-repo</pre>
+
+    <div class="section-label">Option B — SCP from your local machine</div>
+    <pre><span class="comment"># Run this on your LOCAL machine, not on EC2</span>
+<span class="cmd">scp</span> <span class="flag">-i</span> ~/Downloads/my-key.pem <span class="flag">-r</span> ./your-project ubuntu@<span class="str">ec2-xx-xx-xx-xx.compute-1.amazonaws.com</span>:~/</pre>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <span>Git is cleaner for iteration. You can <code>git pull</code> to deploy updates instead of reuploading files.</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">5</div>
+    <div>
+      <div class="step-title">Handle Environment Variables</div>
+      <div class="step-sub">Don't commit secrets — create a .env file on the instance</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <p>If your Compose file uses a <code>.env</code> file, create it directly on the instance. Don't put secrets in your git repo.</p>
+
+    <pre><span class="comment"># Create a .env in your project directory on EC2</span>
+<span class="cmd">nano</span> .env
+
+<span class="comment"># Paste in your variables, e.g.:</span>
+<span class="str">DATABASE_URL=postgres://user:pass@db:5432/mydb
+SECRET_KEY=your-secret-here</span></pre>
+
+    <div class="callout success">
+      <span class="callout-icon">✅</span>
+      <span>Make sure <code>.env</code> is in your <code>.gitignore</code>. The file lives only on the server — never in version control.</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 6 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">6</div>
+    <div>
+      <div class="step-title">Start Your Stack</div>
+      <div class="step-sub">Inside your project directory on EC2</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <pre><span class="comment"># First run: build images and start in foreground to see logs</span>
+<span class="cmd">docker compose up</span> <span class="flag">--build</span>
+
+<span class="comment"># Once it looks healthy, Ctrl+C and start detached</span>
+<span class="cmd">docker compose up</span> <span class="flag">-d --build</span></pre>
+
+    <div class="instruction">
+      <strong>Useful commands while debugging</strong>
+      <pre><span class="cmd">docker compose ps</span>               <span class="comment"># status of all services</span>
+<span class="cmd">docker compose logs</span> <span class="flag">-f</span>           <span class="comment"># follow all logs</span>
+<span class="cmd">docker compose logs</span> <span class="flag">-f</span> <span class="str">web</span>       <span class="comment"># follow logs for one service</span>
+<span class="cmd">docker compose exec web bash</span>     <span class="comment"># shell inside a running container</span></pre>
+    </div>
+
+    <p>Hit your EC2 public IP in a browser. If it doesn't load, check your security group ports first.</p>
+  </div>
+</div>
+
+<!-- STEP 7 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">7</div>
+    <div>
+      <div class="step-title">Survive Reboots</div>
+      <div class="step-sub">Make your stack start automatically when the instance restarts</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <p>The quick way: add <code>restart: always</code> to each service in your Compose file, then enable Docker to start on boot:</p>
+
+    <pre><span class="comment"># In docker-compose.yml, each service gets:</span>
+<span class="str">services:
+  web:
+    image: ...
+    restart: always   # ← add this line</span></pre>
+
+    <pre><span class="comment"># On the EC2 instance — enable Docker daemon on boot</span>
+<span class="cmd">sudo systemctl enable</span> docker</pre>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <span><code>restart: always</code> tells Docker to restart the container if it crashes or if the Docker daemon starts. Combined with <code>systemctl enable docker</code>, your stack comes back up after any reboot automatically.</span>
+    </div>
+
+    <div class="section-label">Test it</div>
+    <pre><span class="cmd">sudo reboot</span>
+<span class="comment"># Wait ~30s, then SSH back in and run:</span>
+<span class="cmd">docker compose ps</span></pre>
+  </div>
+</div>
+
+<!-- STEP 8 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">8</div>
+    <div>
+      <div class="step-title">Deploying Updates</div>
+      <div class="step-sub">After making code changes</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <pre><span class="comment"># SSH into your instance, go to project dir, then:</span>
+<span class="cmd">git pull</span>
+<span class="cmd">docker compose up</span> <span class="flag">-d --build</span>
+
+<span class="comment"># Old containers are replaced; volumes (your data) are preserved</span></pre>
+
+    <div class="callout success">
+      <span class="callout-icon">✅</span>
+      <span>Named volumes persist across <code>docker compose up --build</code>. Your database data survives redeployments unless you explicitly run <code>docker compose down -v</code>.</span>
+    </div>
+  </div>
+</div>
+
+<!-- Checklist -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-num">✓</div>
+    <div>
+      <div class="step-title">Launch Checklist</div>
+      <div class="step-sub">Things to verify before calling it done</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <ul class="checklist">
+      <li><span class="check">□</span> Security group has ports 22 (SSH), 80 (HTTP), and your app port open</li>
+      <li><span class="check">□</span> <code>docker compose ps</code> shows all services as <code>Up</code></li>
+      <li><span class="check">□</span> App accessible via EC2 public IP in browser</li>
+      <li><span class="check">□</span> <code>restart: always</code> set on all services</li>
+      <li><span class="check">□</span> <code>sudo systemctl enable docker</code> run</li>
+      <li><span class="check">□</span> <code>.env</code> is in <code>.gitignore</code></li>
+      <li><span class="check">□</span> Rebooted and confirmed stack came back up automatically</li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  AWS EC2 + Docker Compose · Free Tier Guide · t2.micro / Ubuntu 22.04
+</footer>
+
+</div>
+</body>
+</html>
