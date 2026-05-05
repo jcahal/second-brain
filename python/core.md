@@ -1,4 +1,4 @@
-# Python cheat sheet — annotated
+# Core Language
 
 ---
 

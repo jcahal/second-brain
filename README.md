@@ -1,55 +1,45 @@
-# dev-cheatsheets
+# second brain
 
-A personal reference library of annotated cheat sheets for languages and libraries. Each sheet pairs concise code examples with plain-language descriptions — written to explain the *why*, not just the *how*.
+Personal knowledge base — annotated reference sheets for languages and tools. Each sheet explains the *why* behind the syntax, not just the *what*.
+
+Live at **[jcahal.github.io/second-brain](https://jcahal.github.io/second-brain)**.
+
+---
+
+## local development
+
+```bash
+docker compose up
+```
+
+Opens at `http://localhost:5173`. Hot-reloads on save. No local Node.js needed.
 
 ---
 
 ## structure
 
-```
-./
-├── index.html          ← visual browser index
-├── README.md           ← this file
-│
-├── python/
-│   ├── index.html      ← rendered cheat sheet
-│   ├── README.md       ← markdown cheat sheet
-│   └── fastapi/
-│       ├── index.html
-│       └── README.md
-│
-└── ...
-```
+Each language gets a folder with an `index.md` (hub page) and individual sheets per topic or library. Libraries nest under their parent language.
 
-Each language lives in its own folder. Libraries and frameworks nest under their parent language.
+```
+<language>/
+├── index.md          ← hub: links to all sheets in this section
+├── core.md           ← core language reference
+└── <library>/
+    └── index.md      ← library-specific sheet
+```
 
 ---
 
-## viewing
+## adding content
 
-**In the browser** — open `index.html` at any level for a rendered view.
-
-**In your editor / markdown viewer** — open any `README.md` directly.
-
-**Locally** — clone and open `index.html` in a browser. No server needed, no dependencies.
-
----
-
-## adding a new sheet
-
-1. Create a folder: `mkdir <language>` or `<language>/<library>`
-2. Add `index.html` (rendered) and `README.md` (markdown source)
-3. Add an entry to the root `index.html` under the appropriate language section
+1. Create the markdown file in the right folder
+2. Add a row to the parent `index.md` table
+3. Wire up the sidebar in `.vitepress/config.mts`
 
 ---
 
 ## conventions
 
-- Code examples are minimal — one idea at a time
-- Comments explain *what's happening*, not just *what it is*
-- Each section opens with a plain-language description before the code
+- Each section opens with a plain-language *why* before the code
+- Examples are minimal — one concept at a time
 - Gotchas and non-obvious behavior are called out explicitly
-
----
-
-*Private repo — personal reference only.*
