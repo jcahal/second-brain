@@ -4,6 +4,7 @@ export default defineConfig({
   title: 'Jon\'s Second Brain',
   description: 'Personal knowledge base — annotated reference sheets for languages & tools.',
   base: '/second-brain/',
+  srcExclude: ['CLAUDE.md'],
 
   themeConfig: {
     nav: [
@@ -18,6 +19,15 @@ export default defineConfig({
         link: '/python/',
         items: [
           { text: 'Core Language', link: '/python/core' },
+          {
+            text: 'Libraries',
+            items: [
+              { text: 'FastAPI', link: '/python/fastapi' },
+              { text: 'Pydantic v2', link: '/python/pydantic' },
+              { text: 'joblib', link: '/python/joblib' },
+              { text: 'MLflow', link: '/python/mlflow' },
+            ],
+          },
         ],
       },
       {
