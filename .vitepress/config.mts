@@ -10,6 +10,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Python', link: '/python/' },
+      { text: 'Git', link: '/git/' },
       { text: 'AWS', link: '/aws/ec2-docker-compose' },
     ],
 
@@ -28,6 +29,13 @@ export default defineConfig({
               { text: 'MLflow', link: '/python/mlflow' },
             ],
           },
+        ],
+      },
+      {
+        text: 'Git',
+        link: '/git/',
+        items: [
+          { text: 'Conventional Commits', link: '/git/conventional-commits' },
         ],
       },
       {
