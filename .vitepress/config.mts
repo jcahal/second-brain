@@ -12,6 +12,7 @@ export default defineConfig({
       { text: 'Python', link: '/python/' },
       { text: 'Git', link: '/git/' },
       { text: 'AWS', link: '/aws/ec2-docker-compose' },
+      { text: 'Supabase', link: '/supabase/' },
     ],
 
     sidebar: [
@@ -42,6 +43,13 @@ export default defineConfig({
         text: 'AWS',
         items: [
           { text: 'EC2 + Docker Compose', link: '/aws/ec2-docker-compose' },
+        ],
+      },
+      {
+        text: 'Supabase',
+        link: '/supabase/',
+        items: [
+          { text: 'Encrypted Storage', link: '/supabase/encrypted-storage' },
         ],
       },
     ],

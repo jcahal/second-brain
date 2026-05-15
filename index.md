@@ -19,4 +19,8 @@ features:
     details: Manual deployment walkthrough on Ubuntu 22.04, t2.micro, Free Tier.
     link: /aws/ec2-docker-compose
     linkText: Read
+  - title: Supabase
+    details: Client-side encryption before storing in Supabase — Python Fernet and JS AES-256-GCM patterns, key management gotchas.
+    link: /supabase/
+    linkText: Explore
 ---
