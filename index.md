@@ -19,4 +19,8 @@ features:
     details: Manual deployment walkthrough on Ubuntu 22.04, t2.micro, Free Tier.
     link: /aws/ec2-docker-compose
     linkText: Read
+  - title: Supabase
+    details: Encrypted storage patterns — pgcrypto, Vault (pgsodium), and client-side AES; with key management gotchas.
+    link: /supabase/
+    linkText: Explore
 ---
