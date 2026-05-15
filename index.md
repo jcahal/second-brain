@@ -20,7 +20,7 @@ features:
     link: /aws/ec2-docker-compose
     linkText: Read
   - title: Supabase
-    details: Encrypted storage patterns — pgcrypto, Vault (pgsodium), and client-side AES; with key management gotchas.
+    details: Client-side encryption before storing in Supabase — Python Fernet and JS AES-256-GCM patterns, key management gotchas.
     link: /supabase/
     linkText: Explore
 ---

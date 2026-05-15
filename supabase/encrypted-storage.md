@@ -1,175 +1,128 @@
 # Encrypted Storage
 
-> Three encryption strategies for Supabase data, ordered from least to most isolation: server-side SQL functions, Vault secret storage, and client-side encryption. See [Supabase Vault docs](https://supabase.com/docs/guides/database/vault) and [pgcrypto](https://www.postgresql.org/docs/current/pgcrypto.html).
+> Encrypt sensitive text in your app before it reaches Supabase — the database stores opaque bytes and never sees plaintext. Decrypt in the client after fetching.
 
 ---
 
-## Why Encrypt at the Database Layer?
+## Why This Approach
 
-Supabase encrypts data at rest on disk by default — but that only protects against physical theft of storage media. It does not protect against a compromised database connection, a stolen logical backup, or a superuser with direct access to the database process.
+Supabase's row-level security controls *who* can read a row, but a user with database access (service role, direct Postgres connection, a stolen backup) still sees the plaintext. Encrypting client-side means the ciphertext is all that ever leaves your app — even Supabase staff cannot read the data.
 
-Column-level and client-side encryption protect the *bytes themselves*, regardless of how the database is accessed. The three approaches below differ in one critical dimension: **who holds the key**, and therefore who is capable of decrypting the data.
-
----
-
-## Approach A — pgcrypto (Server-Side Symmetric AES)
-
-`pgcrypto` is a PostgreSQL extension that runs symmetric encryption directly in the database process. The key is passed as a string in the SQL call, which means encryption requires no application code change and no external service. The tradeoff is that the key travels over the database connection and lives in the database session while the query runs.
-
-### Enable the extension
-
-```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
--- run once per database; requires superuser or service role
-```
-
-### Encrypt on insert
-
-```sql
-INSERT INTO private_data (payload)
-VALUES (pgp_sym_encrypt('sensitive text', 'your-passphrase'));
--- column type should be text or bytea
--- load the passphrase from an env var in your app — never hardcode it
-```
-
-### Decrypt on read
-
-```sql
-SELECT pgp_sym_decrypt(payload::bytea, 'your-passphrase')
-FROM private_data
-WHERE id = $1;
--- cast to bytea required — pgcrypto stores binary data
-```
-
-### Gotchas
-
-> ⚠️ The passphrase appears as a string literal in `pg_stat_activity` while the query is running. If `log_min_duration_statement` is set to `0` in development, it will also appear in query logs. Set it to `-1` in dev to avoid logging all queries.
-
-> ⚠️ `pgp_sym_encrypt` uses a random IV on every call, so the same plaintext produces different ciphertext each time. You cannot use an encrypted column in a `WHERE` clause, join, or index — the bytes are incomparable across rows.
-
-> ⚠️ The key lives in the PostgreSQL session, not a hardware security module. A superuser can observe it in `pg_stat_activity` during query execution. This approach is suitable for protecting data from application-layer breaches, not from DBA-level access.
+The tradeoff: you cannot query, filter, or sort on encrypted columns.
 
 ---
 
-## Approach B — Supabase Vault (pgsodium-backed)
-
-Vault uses pgsodium, which wraps libsodium's `crypto_secretbox`. The master encryption key is stored in a server-side key file managed by Supabase infrastructure — it is never present in your SQL calls or query logs. When you call `vault.create_secret()`, pgsodium derives an encryption key from the master key transparently. You never handle or see the key.
-
-This is meaningfully different from pgcrypto: the key is not in your SQL, not in your app code, and not in any log. The tradeoff is that the key is still on Supabase infrastructure, so the isolation boundary is Supabase's infrastructure security, not your own.
-
-### Create a secret
+## Schema
 
 ```sql
-SELECT vault.create_secret('my-api-key-value', 'my-api-key-name');
--- returns a UUID — save it if you want to update the secret later
--- 'name' is optional but enables lookup by name instead of UUID
+CREATE TABLE private_notes (
+  id      uuid  PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid  REFERENCES auth.users NOT NULL,
+  payload text  NOT NULL   -- base64-encoded ciphertext
+);
 ```
 
-### Read a secret
-
-```sql
-SELECT decrypted_secret
-FROM vault.decrypted_secrets
-WHERE name = 'my-api-key-name';
--- decryption happens inside the pgsodium extension
--- plaintext is returned only to your session
-```
-
-### Update a secret
-
-```sql
-SELECT vault.update_secret('the-uuid-from-create', 'new-api-key-value');
--- pass the UUID returned by create_secret, not the name
-```
-
-### Gotchas
-
-> ⚠️ `vault.decrypted_secrets` is a view, not a table. Every `SELECT` decrypts live — there is no cached plaintext row. This is by design, but it means repeated reads have decryption overhead.
-
-> ⚠️ Vault is designed for small secrets: API keys, tokens, connection strings. Do not use it for bulk row-level encryption of large payloads — use pgcrypto or client-side encryption for that.
-
-> ⚠️ On Supabase Cloud, the pgsodium master key is managed for you. On **self-hosted** Supabase, you must generate and configure this key yourself — it is not created automatically. See the [pgsodium key management docs](https://github.com/michelp/pgsodium#server-key-management).
-
-> ⚠️ The `anon` key cannot call Vault functions directly — they require the `service_role` key or an explicit `GRANT EXECUTE` on the function to a specific role.
+`text` works fine here — we'll base64-encode the ciphertext before storing so it survives the round-trip as a plain string.
 
 ---
 
-## Approach C — Client-Side Encryption (Application Layer)
+## Python — Fernet (AES-128-CBC + HMAC-SHA256)
 
-In this approach the plaintext never leaves your application process. Supabase receives only opaque bytes. Even if the database is fully compromised — backups exfiltrated, superuser credentials exposed, Supabase infrastructure accessed — the data is unreadable without the key that never touched the database.
-
-This is the only approach where database administrators cannot read the data. The tradeoff is that your application owns key management entirely.
-
-### Python — Fernet (AES-128-CBC + HMAC-SHA256)
+```bash
+pip install cryptography supabase
+```
 
 ```python
-from cryptography.fernet import Fernet
 import os
+from cryptography.fernet import Fernet
+from supabase import create_client
 
-KEY = os.environ["ENCRYPTION_KEY"]  # generate once: Fernet.generate_key().decode()
-f = Fernet(KEY)
+supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+f = Fernet(os.environ["ENCRYPTION_KEY"])  # generate once: Fernet.generate_key().decode()
 
-ciphertext = f.encrypt(b"sensitive value")  # authenticated encryption — tamper-evident
-# store ciphertext (bytes) in a bytea column in Supabase
+# --- encrypt and store ---
+ciphertext = f.encrypt(b"my sensitive text").decode()  # base64 string
+supabase.table("private_notes").insert({"user_id": uid, "payload": ciphertext}).execute()
 
-plaintext = f.decrypt(ciphertext)           # raises InvalidToken if tampered
+# --- fetch and decrypt ---
+row = supabase.table("private_notes").select("payload").eq("id", note_id).single().execute()
+plaintext = f.decrypt(row.data["payload"].encode()).decode()
 ```
 
-Fernet tokens include a timestamp. Passing `ttl=3600` to `f.decrypt()` will reject tokens older than one hour — useful for expiring short-lived tokens.
+Generate your key once and store it somewhere safe — never in the database:
 
-### Node.js — AES-256-GCM (built-in `node:crypto`)
-
-```js
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex')  // 32 bytes
-const iv  = randomBytes(12)   // 96-bit IV — generate a fresh IV for every encryption call
-
-const cipher    = createCipheriv('aes-256-gcm', KEY, iv)
-const encrypted = Buffer.concat([cipher.update('sensitive value', 'utf8'), cipher.final()])
-const tag       = cipher.getAuthTag()  // 16-byte authentication tag — must travel with ciphertext
-
-// Store as a single bytea column: iv (12) || tag (16) || ciphertext
-const stored = Buffer.concat([iv, tag, encrypted])
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
-
-To decrypt, slice the stored buffer back into its components and reverse the process with `createDecipheriv` + `decipher.setAuthTag(tag)`.
-
-### Target table schema
-
-```sql
-CREATE TABLE private_records (
-  id      uuid  PRIMARY KEY DEFAULT gen_random_uuid(),
-  payload bytea NOT NULL    -- encrypted bytes from your app
-);
--- bytea is the correct type for arbitrary binary — do not use text for ciphertext
-```
-
-### Gotchas
-
-> ⚠️ The Supabase JavaScript client returns `bytea` columns as a hex string prefixed with `\x` (e.g. `\xdeadbeef`). Strip the prefix and decode from hex before passing to your decryption function.
-
-> ⚠️ You cannot search, filter, or sort on an encrypted column — the bytes are opaque. If you need to query by a field, encrypt only the sensitive sub-fields and leave queryable fields in plaintext.
-
-> ⚠️ For the Node.js AES-GCM example: never reuse an IV with the same key. GCM becomes cryptographically broken under IV reuse — an attacker can recover the key. Always call `randomBytes(12)` per encryption call.
-
-> ⚠️ If you split IV, tag, and ciphertext into separate columns, you risk writing a row with mismatched components. Storing all three concatenated in a single `bytea` column eliminates this class of bug.
 
 ---
 
-## Key Management
+## JavaScript / TypeScript — AES-256-GCM (Web Crypto API)
 
-Your encryption is only as strong as your key management. The table below covers the common options:
+Works in the browser and in Deno/Node (v19+) via the standard `crypto.subtle` API — no extra dependencies.
 
-| Location | Best for | Caution |
-|---|---|---|
-| Environment variable | Simple single-server deployments | Visible in `/proc`, leaks to child processes, no audit log |
-| Supabase Vault | Keys used by Edge Functions or SQL | Key still resides on Supabase infrastructure |
-| AWS KMS / GCP Cloud KMS | Production workloads, compliance requirements | Added latency per decrypt call; per-API-call cost |
-| HashiCorp Vault / Infisical | Self-hosted or multi-cloud key management | Significant operational overhead |
+```ts
+// --- key helpers (run once, store the exported key as a secret) ---
+async function generateKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
+}
 
-### Gotchas
+async function exportKey(key: CryptoKey): Promise<string> {
+  const raw = await crypto.subtle.exportKey('raw', key)
+  return btoa(String.fromCharCode(...new Uint8Array(raw)))
+}
 
-> ⚠️ **Losing the encryption key means losing the data permanently.** There is no recovery path. Treat key backups with at least the same security posture as the data they protect — ideally stricter.
+async function importKey(b64: string): Promise<CryptoKey> {
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
+}
 
-> ⚠️ **Key rotation requires re-encrypting every row.** There is no in-place rotation. The safe procedure: read each row decrypted with the old key, re-encrypt with the new key, write back. Do this in a transaction or with a dual-read window to avoid a state where some rows use the old key and some the new. Only retire the old key once all rows have been confirmed migrated.
+// --- encrypt → base64 string ---
+async function encrypt(key: CryptoKey, text: string): Promise<string> {
+  const iv  = crypto.getRandomValues(new Uint8Array(12))  // fresh IV every call
+  const enc = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(text)
+  )
+  // prefix IV to ciphertext so a single string holds everything needed to decrypt
+  const combined = new Uint8Array(iv.byteLength + enc.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(enc), iv.byteLength)
+  return btoa(String.fromCharCode(...combined))
+}
+
+// --- decrypt → plaintext string ---
+async function decrypt(key: CryptoKey, b64: string): Promise<string> {
+  const combined = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+  const iv  = combined.slice(0, 12)
+  const enc = combined.slice(12)
+  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, enc)
+  return new TextDecoder().decode(dec)
+}
+```
+
+```ts
+// --- usage ---
+const key = await importKey(process.env.ENCRYPTION_KEY!)
+
+// store
+const payload = await encrypt(key, 'my sensitive text')
+await supabase.from('private_notes').insert({ user_id: uid, payload })
+
+// fetch
+const { data } = await supabase.from('private_notes').select('payload').eq('id', noteId).single()
+const plaintext = await decrypt(key, data.payload)
+```
+
+---
+
+## Gotchas
+
+> ⚠️ **Losing the key means losing the data.** There is no recovery. Back up the key with at least the same care as the data — ideally keep it in a secrets manager (Doppler, Infisical, AWS Secrets Manager) rather than only in an env file.
+
+> ⚠️ **Never reuse the IV.** The JS example calls `crypto.getRandomValues` on every encrypt call — this is correct. Do not cache or derive the IV from the plaintext.
+
+> ⚠️ **You cannot query encrypted fields.** If you need to search by a field, leave it in plaintext and encrypt only the sensitive sub-fields.
+
+> ⚠️ **Key rotation requires re-encrypting every row.** Decrypt each row with the old key, re-encrypt with the new key, write back. Only retire the old key once all rows are confirmed migrated.
