@@ -11,6 +11,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Python', link: '/python/' },
       { text: 'Git', link: '/git/' },
+      { text: 'Nuxt', link: '/nuxt/' },
       { text: 'AWS', link: '/aws/ec2-docker-compose' },
       { text: 'Supabase', link: '/supabase/' },
     ],
@@ -37,6 +38,13 @@ export default defineConfig({
         link: '/git/',
         items: [
           { text: 'Conventional Commits', link: '/git/conventional-commits' },
+        ],
+      },
+      {
+        text: 'Nuxt',
+        link: '/nuxt/',
+        items: [
+          { text: 'NuxtUI v2 → v4 Upgrade', link: '/nuxt/nuxt-ui-upgrade' },
         ],
       },
       {
