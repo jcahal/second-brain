@@ -27,4 +27,8 @@ features:
     details: Client-side encryption before storing in Supabase — Python Fernet and JS AES-256-GCM patterns, key management gotchas.
     link: /supabase/
     linkText: Explore
+  - title: Synergy SIS
+    details: Edupoint Synergy SIS query reference — ADM, retention, enrollment history, OEN tracking. SQL + BO queries against the REV schema for Champion Schools.
+    link: /synergy/
+    linkText: Explore
 ---

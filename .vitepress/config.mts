@@ -14,6 +14,7 @@ export default defineConfig({
       { text: 'Nuxt', link: '/nuxt/' },
       { text: 'AWS', link: '/aws/ec2-docker-compose' },
       { text: 'Supabase', link: '/supabase/' },
+      { text: 'Synergy SIS', link: '/synergy/' },
     ],
 
     sidebar: [
@@ -58,6 +59,13 @@ export default defineConfig({
         link: '/supabase/',
         items: [
           { text: 'Encrypted Storage', link: '/supabase/encrypted-storage' },
+        ],
+      },
+      {
+        text: 'Synergy SIS',
+        link: '/synergy/',
+        items: [
+          { text: 'Query Reference Guide', link: '/synergy/' },
         ],
       },
     ],
