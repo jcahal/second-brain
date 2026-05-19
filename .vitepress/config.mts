@@ -10,6 +10,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Python', link: '/python/' },
+      { text: 'SQL', link: '/sql/' },
       { text: 'Git', link: '/git/' },
       { text: 'Nuxt', link: '/nuxt/' },
       { text: 'AWS', link: '/aws/ec2-docker-compose' },
@@ -32,6 +33,13 @@ export default defineConfig({
               { text: 'MLflow', link: '/python/mlflow' },
             ],
           },
+        ],
+      },
+      {
+        text: 'SQL',
+        link: '/sql/',
+        items: [
+          { text: 'Core Crash Course', link: '/sql/core' },
         ],
       },
       {

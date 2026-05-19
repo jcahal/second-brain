@@ -11,6 +11,10 @@ features:
     details: Core language mechanics and library patterns — types, functions, classes, async, gotchas, and more.
     link: /python/
     linkText: Explore
+  - title: SQL
+    details: Crash course on the relational query language — execution order, JOINs, GROUP BY, window functions, NULL semantics, and the gotchas that bite on real data.
+    link: /sql/
+    linkText: Explore
   - title: Git
     details: Workflows and conventions — conventional commits, semver impact, scope patterns.
     link: /git/
