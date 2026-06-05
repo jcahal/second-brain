@@ -47,6 +47,7 @@ The staging → intermediate → marts layering isn't enforced by dbt — it's a
 
 A model is a `.sql` file containing a single SELECT statement. dbt materializes it into your warehouse.
 
+::: v-pre
 ```sql
 -- models/staging/stg_orders.sql
 select
@@ -57,7 +58,9 @@ select
     amount_cents / 100.0        as amount
 from {{ source('raw', 'orders') }}   -- points to a raw table; declares a DAG edge
 ```
+:::
 
+::: v-pre
 ```sql
 -- models/marts/orders.sql
 select
@@ -68,6 +71,7 @@ select
 from {{ ref('stg_orders') }} o        -- ref() points to another model; declares a DAG edge
 join {{ ref('stg_users') }} u on u.user_id = o.user_id
 ```
+:::
 
 `ref()` and `source()` are the two functions you'll use constantly. They do three things at once:
 1. Resolve the correct database/schema for your environment (dev vs prod).
@@ -89,12 +93,14 @@ How dbt persists a model in the warehouse. Four types:
 
 Configure materializations in `dbt_project.yml` (for a whole folder) or per-model in a config block:
 
+::: v-pre
 ```sql
 -- at the top of any .sql model file
 {{ config(materialized='table') }}
 
 select ...
 ```
+:::
 
 ```yaml
 # dbt_project.yml — set defaults by folder
@@ -114,6 +120,7 @@ models:
 
 Incremental models only process rows that are new since the last run. The key is the `is_incremental()` macro — dbt sets it to `false` on the first run (full load) and `true` on subsequent runs (delta only).
 
+::: v-pre
 ```sql
 {{ config(materialized='incremental', unique_key='order_id') }}
 
@@ -129,12 +136,13 @@ from {{ source('raw', 'orders') }}
   where updated_at > (select max(updated_at) from {{ this }})
 {% endif %}
 ```
+:::
 
-- `{{ this }}` refers to the model's own table in the warehouse.
+- <code v-pre>{{ this }}</code> refers to the model's own table in the warehouse.
 - `unique_key` tells dbt how to deduplicate on `MERGE` (Snowflake/BigQuery) or `DELETE + INSERT` (Postgres).
 - Without `unique_key`, dbt just appends. Appending is fine for immutable event tables (logs). Use `unique_key` when rows can be updated (orders with a status that changes).
 
-> **Gotcha — late-arriving data:** the `max(updated_at)` filter silently misses rows that arrive late with an old timestamp. A common fix is to look back a safe window: `where updated_at > (select max(updated_at) from {{ this }}) - interval '3 days'`. This creates some reprocessing overhead but prevents silent data gaps.
+> **Gotcha — late-arriving data:** the `max(updated_at)` filter silently misses rows that arrive late with an old timestamp. A common fix is to look back a safe window: <code v-pre>where updated_at > (select max(updated_at) from {{ this }}) - interval '3 days'</code>. This creates some reprocessing overhead but prevents silent data gaps.
 
 > **`--full-refresh` flag:** run `dbt run --full-refresh` to force a full rebuild of incremental models (e.g., when you change the model's logic). Without this flag, schema changes to the model can break or silently corrupt the incremental table.
 
@@ -161,7 +169,7 @@ sources:
       - name: users
 ```
 
-Then in your model: `{{ source('raw', 'orders') }}` — not `raw_data.orders`. The extra indirection means renaming a schema is a one-line YAML change, not a find-and-replace across 40 SQL files.
+Then in your model: <code v-pre>{{ source('raw', 'orders') }}</code> — not `raw_data.orders`. The extra indirection means renaming a schema is a one-line YAML change, not a find-and-replace across 40 SQL files.
 
 Run `dbt source freshness` to check whether your raw tables are being updated on schedule.
 
@@ -204,6 +212,7 @@ The four built-in generic tests — `not_null`, `unique`, `accepted_values`, `re
 
 Custom assertions in `tests/`. A test passes if the query returns **zero rows**. Whatever you want to assert, write it so that a violation is a returned row.
 
+::: v-pre
 ```sql
 -- tests/no_negative_amounts.sql
 -- this test fails (returns rows) if any orders have a negative amount
@@ -211,6 +220,7 @@ select order_id, amount
 from {{ ref('stg_orders') }}
 where amount < 0
 ```
+:::
 
 > **Run tests after every run:** `dbt build` = `dbt run` + `dbt test` chained together, in DAG order. Use it instead of running run and test separately. It stops at the first failing model so downstream models built on bad data don't run.
 
@@ -261,6 +271,7 @@ models:
 
 dbt SQL files are Jinja templates. Beyond `ref()` and `source()`, the most useful things:
 
+::: v-pre
 ```sql
 -- variables: {{ var('start_date', '2020-01-01') }}
 -- run with: dbt run --vars '{"start_date": "2024-01-01"}'
@@ -271,9 +282,11 @@ where created_at >= '{{ var("start_date") }}'
   where is_test_account = false
 {% endif %}
 ```
+:::
 
 **Macros** are reusable Jinja functions. Store them in `macros/`.
 
+::: v-pre
 ```sql
 -- macros/cents_to_dollars.sql
 {% macro cents_to_dollars(column_name) %}
@@ -283,6 +296,7 @@ where created_at >= '{{ var("start_date") }}'
 -- usage in a model
 select {{ cents_to_dollars('amount_cents') }} as amount from ...
 ```
+:::
 
 > **Don't over-macro.** A macro that's used once just makes the query harder to read. Extract a macro when you find yourself copying the same Jinja logic across 3+ models.
 
@@ -302,7 +316,7 @@ dbt seed                   # loads all CSVs
 dbt seed --select country_codes   # loads one
 ```
 
-Reference a seed like any other model: `{{ ref('country_codes') }}`.
+Reference a seed like any other model: <code v-pre>{{ ref('country_codes') }}</code>.
 
 > **Seeds are not for large data.** They get committed to git and re-uploaded on every `dbt seed`. If a CSV has more than a few thousand rows, load it via your EL tool instead.
 
@@ -312,6 +326,7 @@ Reference a seed like any other model: `{{ ref('country_codes') }}`.
 
 Snapshots capture Type 2 SCD (Slowly Changing Dimension) history — i.e., they keep old versions of rows instead of overwriting them. dbt adds `dbt_valid_from` and `dbt_valid_to` columns automatically.
 
+::: v-pre
 ```sql
 -- snapshots/orders_snapshot.sql
 {% snapshot orders_snapshot %}
@@ -327,6 +342,7 @@ select * from {{ source('raw', 'orders') }}
 
 {% endsnapshot %}
 ```
+:::
 
 ```bash
 dbt snapshot
@@ -379,11 +395,13 @@ dbt deps   # installs packages into dbt_packages/
 
 **`dbt_utils`** is effectively a standard library — install it on every project. Most useful:
 
+::: v-pre
 ```sql
 {{ dbt_utils.surrogate_key(['order_id', 'line_item_id']) }}   -- hashed composite PK
 {{ dbt_utils.date_spine('day', "'2020-01-01'::date", "current_date") }}  -- calendar table
 {{ dbt_utils.pivot('status', ['placed','shipped','delivered']) }}  -- dynamic pivot
 ```
+:::
 
 ---
 
